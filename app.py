@@ -36,7 +36,9 @@ def download_weekly_data(tickers: List[str], years: int = 7) -> pd.DataFrame:
     return data
 
 
-def build_chart(df: pd.DataFrame, label: str, ticker: str) -> go.Figure:
+def build_chart(
+    df: pd.DataFrame, label: str, ticker: str, is_dark: bool
+) -> go.Figure:
     if ticker not in df.columns.get_level_values(0):
         raise ValueError(f"No data returned for {ticker}")
 
@@ -61,19 +63,47 @@ def build_chart(df: pd.DataFrame, label: str, ticker: str) -> go.Figure:
         )
     )
 
+    font_color = "#F0F0F0" if is_dark else "#1A1A1A"
+    paper_bg = "#0E0E0E" if is_dark else "#FAFAFA"
+    plot_bg = "#111111" if is_dark else "#FFFFFF"
+    grid_color = "#2A2A2A" if is_dark else "#E6E6E6"
+
     fig.update_layout(
-        title=f"{label} ({ticker}) - Weekly Close & 30W SMA",
+        title=dict(
+            text=f"{label} ({ticker}) - Weekly Close & 30W SMA",
+            font=dict(color=font_color, size=16),
+        ),
         xaxis_title="Week",
         yaxis_title="Price",
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(color=font_color),
+        ),
         margin=dict(l=40, r=20, t=70, b=40),
-        template="plotly_white",
-        paper_bgcolor="#FAFAFA",
-        plot_bgcolor="#FFFFFF",
+        template="plotly_dark" if is_dark else "plotly_white",
+        paper_bgcolor=paper_bg,
+        plot_bgcolor=plot_bg,
+        font=dict(color=font_color),
     )
-    fig.update_xaxes(showgrid=True, gridcolor="#E6E6E6", zeroline=False)
-    fig.update_yaxes(showgrid=True, gridcolor="#E6E6E6", zeroline=False)
+    fig.update_xaxes(
+        showgrid=True,
+        gridcolor=grid_color,
+        zeroline=False,
+        tickfont=dict(color=font_color),
+        title=dict(font=dict(color=font_color)),
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor=grid_color,
+        zeroline=False,
+        tickfont=dict(color=font_color),
+        title=dict(font=dict(color=font_color)),
+    )
     fig.update_traces(hovertemplate="%{x|%Y-%m-%d}<br>%{y:.2f}<extra></extra>")
     return fig
 
@@ -91,13 +121,31 @@ selected = [t for t in custom.values() if t.strip()]
 with st.spinner("Downloading weekly data..."):
     data = download_weekly_data(selected, years=years)
 
+def _is_dark_theme() -> bool:
+    base = (st.get_option("theme.base") or "").lower()
+    if base in {"dark", "light"}:
+        return base == "dark"
+    bg = st.get_option("theme.backgroundColor") or ""
+    if isinstance(bg, str) and bg.startswith("#") and len(bg) in {4, 7}:
+        if len(bg) == 4:
+            bg = "#" + "".join([c * 2 for c in bg[1:]])
+        r = int(bg[1:3], 16)
+        g = int(bg[3:5], 16)
+        b = int(bg[5:7], 16)
+        luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+        return luminance < 0.45
+    return False
+
+
+is_dark_theme = _is_dark_theme()
+
 st.subheader("Charts")
 cols = st.columns(2)
 for idx, (label, ticker) in enumerate(custom.items()):
     if not ticker.strip():
         continue
     try:
-        fig = build_chart(data, label, ticker)
+        fig = build_chart(data, label, ticker, is_dark_theme)
     except Exception as exc:
         st.warning(f"{label} ({ticker}) - {exc}")
         continue
